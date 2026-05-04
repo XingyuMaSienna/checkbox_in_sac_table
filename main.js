@@ -13,39 +13,46 @@ class CheckboxTableWidget extends HTMLElement {
         this._render();
     }
 
-    // ── SAC property setters ──────────────────────────────────────────────────
+    // ── Called by SAC when bound data source updates ──────────────────────────
 
-    set tableData(value) {
+    onResultChanged() {
         try {
-            this._data = typeof value === 'string' ? JSON.parse(value) : (value || []);
-        } catch (e) {
-            this._data = [];
-        }
-        this._selectedIndices.clear();
-        this._render();
-    }
+            var binding = this.dataBindings.getDataBinding('myDataSource');
+            if (!binding) return;
 
-    set columns(value) {
-        if (typeof value === 'string' && value.trim() !== '') {
-            this._columns = value.split(',').map(c => c.trim());
-        } else if (Array.isArray(value)) {
-            this._columns = value;
-        } else {
-            this._columns = [];
+            var dataSource = binding.getDataSource();
+            if (!dataSource) return;
+
+            var resultSet = dataSource.getResultSet();
+            if (!resultSet) return;
+
+            var dimensions = dataSource.getDimensions();
+            var dimLabels  = dimensions.map(function(d) { return d.description || d.id; });
+
+            var rowCount = resultSet.getTupleCountByDimension('dimensions');
+            var rows = [];
+
+            for (var i = 0; i < rowCount; i++) {
+                var members = resultSet.getTuple(i, 'dimensions');
+                var row = {};
+                members.forEach(function(member) {
+                    row[member.dimensionId] = member.id;
+                });
+                rows.push(row);
+            }
+
+            this._data    = rows;
+            this._columns = dimLabels;
+            this._selectedIndices.clear();
+            this._selectedDataArray = [];
+            this._render();
+
+        } catch(e) {
+            this.shadowRoot.innerHTML = '<p style="padding:12px;color:red;font-family:Arial,sans-serif;font-size:12px;">Data error: ' + e.message + '</p>';
         }
-        this._render();
     }
 
     // ── SAC methods ───────────────────────────────────────────────────────────
-
-    getSelectedRows() {
-        return JSON.stringify(Array.from(this._selectedIndices));
-    }
-
-    getSelectedData() {
-        const rows = Array.from(this._selectedIndices).map(i => this._data[i]);
-        return JSON.stringify(rows);
-    }
 
     getSelectedCount() {
         return this._selectedIndices.size;
@@ -65,41 +72,35 @@ class CheckboxTableWidget extends HTMLElement {
 
     // ── Internal ──────────────────────────────────────────────────────────────
 
-    _cols() {
-        return this._columns.length > 0
-            ? this._columns
-            : (this._data.length > 0 ? Object.keys(this._data[0]) : []);
-    }
-
     _render() {
         if (!this._data || this._data.length === 0) {
             this.shadowRoot.innerHTML = `
                 <style>
-                    p { font-family: '72', Arial, sans-serif; font-size: 14px;
-                        color: #888; padding: 16px; margin: 0; }
+                    p { font-family:'72',Arial,sans-serif; font-size:14px;
+                        color:#888; padding:16px; margin:0; }
                 </style>
-                <p>No data. Set the <strong>tableData</strong> property.</p>`;
+                <p>No data. Bind a data source and add dimensions to the <strong>Dimensions</strong> feed.</p>`;
             return;
         }
 
-        const cols = this._cols();
-        const allSelected = this._data.length > 0 &&
-            this._selectedIndices.size === this._data.length;
+        const cols = this._columns.length > 0
+            ? this._columns
+            : Object.keys(this._data[0]);
 
-        const headerCells = cols.map(c =>
-            `<th>${this._esc(c)}</th>`
-        ).join('');
+        const dataKeys = this._data.length > 0 ? Object.keys(this._data[0]) : cols;
+
+        const allSelected = this._selectedIndices.size === this._data.length;
+
+        const headerCells = cols.map(c => `<th>${this._esc(c)}</th>`).join('');
 
         const bodyRows = this._data.map((row, i) => {
-            const checked    = this._selectedIndices.has(i) ? 'checked' : '';
-            const rowClass   = this._selectedIndices.has(i) ? 'row-selected' : '';
-            const dataCells  = cols.map(c =>
-                `<td>${this._esc(row[c] !== undefined ? String(row[c]) : '')}</td>`
+            const checked   = this._selectedIndices.has(i) ? 'checked' : '';
+            const rowClass  = this._selectedIndices.has(i) ? 'row-selected' : '';
+            const dataCells = dataKeys.map(k =>
+                `<td>${this._esc(row[k] !== undefined ? String(row[k]) : '')}</td>`
             ).join('');
             return `<tr class="${rowClass}" data-index="${i}">
-                        <td class="cb-cell">
-                            <input type="checkbox" data-index="${i}" ${checked}/>
-                        </td>
+                        <td class="cb-cell"><input type="checkbox" data-index="${i}" ${checked}/></td>
                         ${dataCells}
                     </tr>`;
         }).join('');
@@ -107,80 +108,33 @@ class CheckboxTableWidget extends HTMLElement {
         this.shadowRoot.innerHTML = `
             <style>
                 *, *::before, *::after { box-sizing: border-box; }
-                :host {
-                    display: block;
-                    width: 100%;
-                    height: 100%;
-                    overflow: auto;
-                    font-family: '72', Arial, sans-serif;
-                    font-size: 13px;
-                }
-                table {
-                    width: 100%;
-                    border-collapse: collapse;
-                    background: #fff;
-                }
-                thead tr {
-                    background: #0a6ed1;
-                    color: #fff;
-                }
-                th {
-                    padding: 9px 12px;
-                    text-align: left;
-                    font-weight: 600;
-                    white-space: nowrap;
-                    border-right: 1px solid rgba(255,255,255,0.2);
-                }
-                th:last-child { border-right: none; }
-                td {
-                    padding: 8px 12px;
-                    border-bottom: 1px solid #e5e5e5;
-                    color: #333;
-                }
-                tbody tr:hover td  { background: #f0f7ff; }
-                tbody tr.row-selected td { background: #d1e8ff; }
-                .cb-cell {
-                    width: 36px;
-                    text-align: center;
-                    padding: 8px 4px;
-                }
-                input[type=checkbox] {
-                    width: 15px;
-                    height: 15px;
-                    cursor: pointer;
-                    accent-color: #0a6ed1;
-                }
-                .badge {
-                    display: inline-block;
-                    margin: 6px 0 2px 2px;
-                    padding: 2px 8px;
-                    background: #0a6ed1;
-                    color: #fff;
-                    border-radius: 10px;
-                    font-size: 11px;
-                }
+                :host { display:block; width:100%; height:100%; overflow:auto;
+                        font-family:'72',Arial,sans-serif; font-size:13px; }
+                table { width:100%; border-collapse:collapse; background:#fff; }
+                thead tr { background:#0a6ed1; color:#fff; }
+                th { padding:9px 12px; text-align:left; font-weight:600;
+                     white-space:nowrap; border-right:1px solid rgba(255,255,255,0.2); }
+                th:last-child { border-right:none; }
+                td { padding:8px 12px; border-bottom:1px solid #e5e5e5; color:#333; }
+                tbody tr:hover td { background:#f0f7ff; }
+                tbody tr.row-selected td { background:#d1e8ff; }
+                .cb-cell { width:36px; text-align:center; padding:8px 4px; }
+                input[type=checkbox] { width:15px; height:15px; cursor:pointer; accent-color:#0a6ed1; }
+                .badge { display:inline-block; margin:6px 0 2px 2px; padding:2px 8px;
+                         background:#0a6ed1; color:#fff; border-radius:10px; font-size:11px; }
             </style>
-
             <span class="badge">${this._selectedIndices.size} selected</span>
-
             <table>
                 <thead>
                     <tr>
-                        <th class="cb-cell">
-                            <input type="checkbox" id="chk-all"
-                                   ${allSelected ? 'checked' : ''}/>
-                        </th>
+                        <th class="cb-cell"><input type="checkbox" id="chk-all" ${allSelected ? 'checked' : ''}/></th>
                         ${headerCells}
                     </tr>
                 </thead>
-                <tbody>
-                    ${bodyRows}
-                </tbody>
+                <tbody>${bodyRows}</tbody>
             </table>`;
 
-        // Select-all handler
-        const chkAll = this.shadowRoot.querySelector('#chk-all');
-        chkAll.addEventListener('change', (e) => {
+        this.shadowRoot.querySelector('#chk-all').addEventListener('change', (e) => {
             if (e.target.checked) {
                 this._data.forEach((_, i) => this._selectedIndices.add(i));
             } else {
@@ -190,7 +144,6 @@ class CheckboxTableWidget extends HTMLElement {
             this._fireEvent();
         });
 
-        // Per-row checkbox handlers
         this.shadowRoot.querySelectorAll('input[data-index]').forEach(cb => {
             cb.addEventListener('change', (e) => {
                 const idx = parseInt(e.target.dataset.index, 10);
@@ -206,20 +159,15 @@ class CheckboxTableWidget extends HTMLElement {
     }
 
     _updateHighlights() {
-        // Update row highlight classes without full re-render
         this.shadowRoot.querySelectorAll('tbody tr').forEach(tr => {
             const idx = parseInt(tr.dataset.index, 10);
             tr.classList.toggle('row-selected', this._selectedIndices.has(idx));
         });
         const badge = this.shadowRoot.querySelector('.badge');
         if (badge) badge.textContent = `${this._selectedIndices.size} selected`;
-
         const chkAll = this.shadowRoot.querySelector('#chk-all');
-        if (chkAll) {
-            chkAll.checked =
-                this._data.length > 0 &&
-                this._selectedIndices.size === this._data.length;
-        }
+        if (chkAll) chkAll.checked =
+            this._data.length > 0 && this._selectedIndices.size === this._data.length;
     }
 
     _fireEvent() {
@@ -235,10 +183,8 @@ class CheckboxTableWidget extends HTMLElement {
 
     _esc(str) {
         return String(str)
-            .replace(/&/g, '&amp;')
-            .replace(/</g, '&lt;')
-            .replace(/>/g, '&gt;')
-            .replace(/"/g, '&quot;');
+            .replace(/&/g, '&amp;').replace(/</g, '&lt;')
+            .replace(/>/g, '&gt;').replace(/"/g, '&quot;');
     }
 }
 
