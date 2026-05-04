@@ -16,22 +16,36 @@ class CheckboxTableWidget extends HTMLElement {
     // ── Called by SAC when bound data source updates ──────────────────────────
 
     onResultChanged() {
+        this.refreshData();
+    }
+
+    refreshData() {
         try {
+            if (!this.dataBindings) {
+                this._showMsg('dataBindings not available yet.');
+                return;
+            }
             var binding = this.dataBindings.getDataBinding('myDataSource');
-            if (!binding) return;
-
+            if (!binding) {
+                this._showMsg('No binding named myDataSource.');
+                return;
+            }
             var dataSource = binding.getDataSource();
-            if (!dataSource) return;
-
+            if (!dataSource) {
+                this._showMsg('No data source connected. Select a model in the Builder panel.');
+                return;
+            }
             var resultSet = dataSource.getResultSet();
-            if (!resultSet) return;
+            if (!resultSet) {
+                this._showMsg('Result set is empty.');
+                return;
+            }
 
             var dimensions = dataSource.getDimensions();
             var dimLabels  = dimensions.map(function(d) { return d.description || d.id; });
 
             var rowCount = resultSet.getTupleCountByDimension('dimensions');
             var rows = [];
-
             for (var i = 0; i < rowCount; i++) {
                 var members = resultSet.getTuple(i, 'dimensions');
                 var row = {};
@@ -48,7 +62,7 @@ class CheckboxTableWidget extends HTMLElement {
             this._render();
 
         } catch(e) {
-            this.shadowRoot.innerHTML = '<p style="padding:12px;color:red;font-family:Arial,sans-serif;font-size:12px;">Data error: ' + e.message + '</p>';
+            this._showMsg('Error: ' + e.message);
         }
     }
 
@@ -179,6 +193,10 @@ class CheckboxTableWidget extends HTMLElement {
             bubbles: true,
             composed: true
         }));
+    }
+
+    _showMsg(msg) {
+        this.shadowRoot.innerHTML = '<p style="padding:12px;font-family:Arial,sans-serif;font-size:12px;color:#555;">' + msg + '</p>';
     }
 
     _esc(str) {
