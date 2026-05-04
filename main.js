@@ -41,14 +41,20 @@ class CheckboxTableWidget extends HTMLElement {
                 return;
             }
 
-            var dimensions = dataSource.getDimensions();
-            var dimLabels  = dimensions.map(function(d) { return d.description || d.id; });
-
             var rowCount = resultSet.getTupleCountByDimension('dimensions');
             var rows = [];
+            var dimLabels = [];
+            var labelsDone = false;
+
             for (var i = 0; i < rowCount; i++) {
                 var members = resultSet.getTuple(i, 'dimensions');
                 var row = {};
+                if (!labelsDone) {
+                    members.forEach(function(member) {
+                        dimLabels.push(member.label || member.description || member.dimensionId);
+                    });
+                    labelsDone = true;
+                }
                 members.forEach(function(member) {
                     row[member.dimensionId] = member.id;
                 });
