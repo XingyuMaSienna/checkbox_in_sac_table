@@ -41,7 +41,13 @@ class CheckboxTableWidget extends HTMLElement {
                 return;
             }
 
-            var rowCount = resultSet.getTupleCountByDimension('dimensions');
+            // DEBUG: show available methods on resultSet
+            var methods = [];
+            for (var key in resultSet) {
+                if (typeof resultSet[key] === 'function') methods.push(key);
+            }
+            this._showMsg('ResultSet methods: ' + methods.join(', '));
+            return;
             var rows = [];
             var dimLabels = [];
             var labelsDone = false;
