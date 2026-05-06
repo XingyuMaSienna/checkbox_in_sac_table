@@ -71,19 +71,38 @@
                     return;
                 }
 
-                // Binding state may be "Success" / "NoData" / "Error" / "Loading"
-                const state = binding.state;
-                if (state && state !== 'Success') {
+                // Binding state may be "Success"/"NoData"/"Error"/"Loading"
+                // (case can vary). We only block rendering when there is
+                // genuinely no data to show.
+                const state = (binding.state || '').toString();
+                const stateLc = state.toLowerCase();
+
+                const metadata = binding.metadata || {};
+                const data = Array.isArray(binding.data) ? binding.data : [];
+
+                if (data.length === 0) {
                     this._rows = [];
                     this._columns = [];
-                    this._message = 'Data state: ' + state +
-                        '. Bind a data source and add dimensions to the Dimensions feed.';
+                    if (stateLc === 'loading' || stateLc === 'pending') {
+                        this._message = 'Loading data…';
+                    } else if (stateLc === 'error') {
+                        var detail = '';
+                        try {
+                            var keys = Object.keys(binding || {}).join(', ');
+                            detail = ' [binding keys: ' + keys + ']';
+                            if (binding.errorMessage) detail += ' msg: ' + binding.errorMessage;
+                            if (binding.error)        detail += ' err: ' + JSON.stringify(binding.error);
+                        } catch (ignore) { /* noop */ }
+                        try { console.warn('CheckboxTable binding error', binding); } catch(e){}
+                        this._message = 'Data source returned an error. ' +
+                            'Check the model binding, dimensions and filters.' + detail;
+                    } else {
+                        this._message = 'No data. Bind a data source and add ' +
+                            'dimensions to the Dimensions feed.';
+                    }
                     this._render();
                     return;
                 }
-
-                const metadata = binding.metadata || {};
-                const data = binding.data || [];
 
                 // Determine which dimensions are in the "dimensions" feed
                 let dimIds = [];
