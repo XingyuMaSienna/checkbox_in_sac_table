@@ -88,14 +88,23 @@
                     } else if (stateLc === 'error') {
                         var detail = '';
                         try {
-                            var keys = Object.keys(binding || {}).join(', ');
-                            detail = ' [binding keys: ' + keys + ']';
+                            var msgs = [];
+                            if (Array.isArray(binding.messages)) {
+                                binding.messages.forEach(function (m) {
+                                    if (!m) return;
+                                    if (typeof m === 'string') { msgs.push(m); return; }
+                                    var s = m.text || m.message || m.shortText || m.description || '';
+                                    if (m.type) s = '[' + m.type + '] ' + s;
+                                    if (m.code) s = s + ' (code: ' + m.code + ')';
+                                    if (!s) { try { s = JSON.stringify(m); } catch (e) { s = '[unprintable]'; } }
+                                    msgs.push(s);
+                                });
+                            }
+                            if (msgs.length) detail = ' — ' + msgs.join(' | ');
                             if (binding.errorMessage) detail += ' msg: ' + binding.errorMessage;
-                            if (binding.error)        detail += ' err: ' + JSON.stringify(binding.error);
                         } catch (ignore) { /* noop */ }
-                        try { console.warn('CheckboxTable binding error', binding); } catch(e){}
-                        this._message = 'Data source returned an error. ' +
-                            'Check the model binding, dimensions and filters.' + detail;
+                        try { console.warn('CheckboxTable binding error', binding); } catch (e) { /* noop */ }
+                        this._message = 'Data source returned an error.' + detail;
                     } else {
                         this._message = 'No data. Bind a data source and add ' +
                             'dimensions to the Dimensions feed.';
